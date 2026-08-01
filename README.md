@@ -37,6 +37,8 @@ demos/            runnable behaviors — rungs 0 and 0.5
   wave.py  dance.py  track.py  reach.py
 tools/            tuning / calibration helpers (not behaviors)
   diagnostics.py  probe_color.py
+infra/            deploy/provisioning tooling (not behaviors either)
+  azure/            cloud-init + az CLI script for VLA cloud inference (see docs/vla-inference-azure.md)
 docs/             the how-to and the roadmap
 ```
 

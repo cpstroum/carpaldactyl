@@ -58,3 +58,7 @@ language-labeled tasks (e.g. move-the-block, stack, put-in-bowl), decide the
 object/position variation, and make sure every episode is cleanly labeled with
 its instruction. Then measure instruction-following and spatial generalization
 separately.
+
+Once a checkpoint exists, [vla-inference-azure.md](vla-inference-azure.md)
+covers serving it from an always-on Azure GPU VM via LeRobot's async
+inference (PolicyServer + RobotClient) instead of running it locally.

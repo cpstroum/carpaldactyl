@@ -1,0 +1,55 @@
+#cloud-config
+# cloud-init for the Brachiomimus VLA inference VM (Azure Standard_NC4as_T4_v3).
+#
+# Installs Docker + the NVIDIA container toolkit (so `docker run --gpus all`
+# works) and Tailscale, then joins the tailnet. Nothing here opens a public
+# inbound port for the gRPC PolicyServer — see docs/vla-inference-azure.md
+# for why (CVE-2026-25874, unauthenticated RCE in lerobot's PolicyServer).
+#
+# TAILSCALE_AUTHKEY is substituted by infra/azure/provision.sh at deploy
+# time (envsubst) from an environment variable — never hardcode a real key
+# in this file or commit one.
+
+package_update: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+
+runcmd:
+  # --- Docker Engine ---
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture)
+    signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
+    > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - systemctl enable --now docker
+
+  # --- NVIDIA container toolkit (host must already have the GPU driver via
+  # the Azure NVIDIA GPU driver extension - see provision.sh) ---
+  - curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  - >
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list |
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' |
+    tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+  - apt-get update
+  - apt-get install -y nvidia-container-toolkit
+  - nvidia-ctk runtime configure --runtime=docker
+  - systemctl restart docker
+
+  # --- Tailscale ---
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - >
+    tailscale up --authkey="${TAILSCALE_AUTHKEY}" --ssh --hostname=brachiomimus-policy-server
+    --advertise-tags=tag:brachiomimus-inference --accept-risk=lose-ssh
+
+  # --- Pull the inference image ahead of time so first launch is fast ---
+  - docker pull huggingface/lerobot-gpu:latest
+
+final_message: "Brachiomimus policy-server host ready after $UPTIME seconds. Join the tailnet, then start the PolicyServer per docs/vla-inference-azure.md."

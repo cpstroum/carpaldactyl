@@ -5,3 +5,7 @@ __pycache__/
 # it must never be committed. Copy .env.example -> .env to get started.
 .env
 .env.local
+wandb key.txt
+
+# Scratch output from running demos (e.g. tools/probe_color.py captures).
+outputs/
