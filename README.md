@@ -106,25 +106,32 @@ python -m demos.wave --port COM4 --reps 3           # Windows
 
 Music-reactive dancing (also rung 0) lives in [docs/music.md](docs/music.md).
 
-## Rung 0.5 — Face tracking: Brachiomimus watches the room
+## Rung 0.5 — Track: Brachiomimus watches the room
 
 Points a plain webcam (not eye-in-hand — anywhere in the room works) at the
-space and turns the arm to face whoever it sees, using OpenCV's built-in
-Haar cascade face detector. No ML training or camera calibration involved.
+space and turns the arm to face a target it sees. Two `--target` modes:
+`face` (default) uses OpenCV's built-in Haar cascade face detector; `color`
+uses the same HSV color-blob detection `reach` uses below, so it can track
+any colored marker instead of a face. No ML training or camera calibration
+involved either way.
 
-> **OpenCV 5 caveat:** this uses the classic `cv2.CascadeClassifier` Haar
-> API, which OpenCV 5 removed (along with the bundled cascade files). Run
-> it on OpenCV **4.x** — `pip install "opencv-python>=4.8,<5"`. `reach`
-> below has no such constraint.
+> **OpenCV 5 caveat:** `--target face` uses the classic
+> `cv2.CascadeClassifier` Haar API, which OpenCV 5 removed (along with the
+> bundled cascade files) — run it on OpenCV **4.x**, `pip install
+> "opencv-python>=4.8,<5"`. `--target color` (and `reach` below) has no
+> such constraint.
 
 ```bash
 python -m demos.track --port /dev/ttyACM0
-python -m demos.track --port COM4 --show      # debug window with the face boxed
+python -m demos.track --port COM4 --show      # debug window with the target boxed
 python -m demos.track --dry-run --show        # try it with no arm connected
+python -m demos.track --dry-run --show --target color   # track a colored marker instead of a face
 ```
 
 If the arm pans or tilts the wrong way for your camera's orientation, add
-`--invert-pan` / `--invert-tilt`.
+`--invert-pan` / `--invert-tilt`. In `--target color` mode, tune
+`--hue-min`/`--hue-max`/`--sat-min`/`--val-min` the same way as `reach`
+below (`python -m tools.probe_color` to read a marker's real HSV).
 
 ## Rung 0.5 — Reach: grasp a colored object with the wrist camera
 

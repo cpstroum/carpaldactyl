@@ -1,24 +1,33 @@
 """
-track.py — make Brachiomimus turn and "look" toward whoever is in view.
+track.py — make Brachiomimus turn and "look" toward whoever/whatever is in
+view.
 
 Points a webcam at the room (it doesn't need to be mounted on the arm — any
-camera pointed at the space works) and uses OpenCV's built-in face detector
-to find the largest face each frame. Brachiomimus turns to face it:
-shoulder_pan tracks left/right, wrist_flex tracks up/down. No ML training or
-eye-in-hand calibration needed - just the Haar cascade that ships with
-opencv-python.
+camera pointed at the space works) and tracks a target each frame.
+Brachiomimus turns to face it: shoulder_pan tracks left/right, wrist_flex
+tracks up/down. No ML training or eye-in-hand calibration needed.
 
-When a face first appears, the gripper gives a quick friendly pulse. When no
-face is in view, the arm eases back to a centered "watching" pose instead of
-snapping.
+Two target modes, selected with --target:
+  - face  (default) — OpenCV's built-in Haar cascade face detector.
+  - color            — an HSV color blob, same detection reach.py uses for
+    its wrist-camera grasp (brachiomimus.vision.find_blob). Tune
+    --hue-min/--hue-max/--sat-min/--val-min the same way reach.py's
+    docstring describes: use `python -m tools.probe_color` to read a
+    marker's real HSV, and --show to see the mask while dialing it in.
+
+When the target first appears, the gripper gives a quick friendly pulse.
+When nothing is in view, the arm eases back to a centered "watching" pose
+instead of snapping.
 
 Usage:
     python -m demos.track --port /dev/ttyACM0
-    python -m demos.track --port COM4 --show          # debug window with face box
-    python -m demos.track --dry-run --show             # no arm, just watch detection
+    python -m demos.track --port COM4 --show                    # debug window with target box
+    python -m demos.track --dry-run --show                       # no arm, just watch detection
+    python -m demos.track --dry-run --show --target color        # track a colored marker instead of a face
 
 Requires opencv-python (`pip install opencv-python`), not otherwise a
-dependency of this repo.
+dependency of this repo. --target face needs OpenCV 4.x (see the caveat
+below); --target color has no such constraint.
 """
 
 import argparse
@@ -31,7 +40,7 @@ from lerobot.motors.feetech import FeetechMotorsBus
 from brachiomimus import config
 from brachiomimus.hardware import CALIBRATION_PATH, MOTORS, READY_POSE, load_calibration
 from brachiomimus.motion import clamp_step
-from brachiomimus.vision import face_detector, largest_face
+from brachiomimus.vision import face_detector, find_blob, largest_face
 
 # Centered version of the raised "ready" pose - arm up and alert, facing
 # forward, rather than angled out for a wave.
@@ -57,8 +66,16 @@ def run(
     tilt_range: float,
     invert_pan: bool,
     invert_tilt: bool,
+    target: str,
+    hue_min: int,
+    hue_max: int,
+    sat_min: int,
+    val_min: int,
 ) -> None:
-    detector = face_detector()
+    # Only touch cv2.CascadeClassifier in face mode - it's the removed-in-
+    # OpenCV-5 API, so color mode never constructs it and stays OpenCV-5-safe.
+    detector = face_detector() if target == "face" else None
+    lower, upper = (hue_min, sat_min, val_min), (hue_max, 255, 255)
     cap = cv2.VideoCapture(camera)
     if not cap.isOpened():
         raise RuntimeError(f"Could not open camera {camera}")
@@ -81,19 +98,25 @@ def run(
                 print("Camera frame read failed, stopping.")
                 break
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            face = largest_face(gray, detector)
+            mask = None
+            if target == "face":
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                box = largest_face(gray, detector)
+                fh, fw = gray.shape
+            else:
+                blob, mask = find_blob(frame, lower, upper)
+                box = blob[:4] if blob is not None else None
+                fh, fw = frame.shape[:2]
 
-            target = dict(TRACK_READY_POSE)
+            goal_pose = dict(TRACK_READY_POSE)
             now = time.monotonic()
 
-            if face is not None:
+            if box is not None:
                 if now - last_seen > LOST_TIMEOUT_S:
                     greet_until = now + GREET_PULSE_S
                 last_seen = now
 
-                x, y, w, h = face
-                fh, fw = gray.shape
+                x, y, w, h = box
                 cx, cy = x + w / 2, y + h / 2
                 dx = (cx - fw / 2) / (fw / 2)  # -1 (left) .. 1 (right)
                 dy = (cy - fh / 2) / (fh / 2)  # -1 (up) .. 1 (down)
@@ -102,15 +125,15 @@ def run(
                 if invert_tilt:
                     dy = -dy
 
-                target[PAN_JOINT] += pan_range * dx
-                target[TILT_JOINT] += tilt_range * dy
+                goal_pose[PAN_JOINT] += pan_range * dx
+                goal_pose[TILT_JOINT] += tilt_range * dy
 
                 if show:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-            target[GRIPPER_JOINT] = GREET_OPEN_DEG if now < greet_until else 0.0
+            goal_pose[GRIPPER_JOINT] = GREET_OPEN_DEG if now < greet_until else 0.0
 
-            current_pose = clamp_step(current_pose, target, MAX_STEP_DEG)
+            current_pose = clamp_step(current_pose, goal_pose, MAX_STEP_DEG)
 
             if dry_run:
                 print({k: round(v, 1) for k, v in current_pose.items()})
@@ -119,6 +142,8 @@ def run(
 
             if show:
                 cv2.imshow("track.py", frame)
+                if mask is not None:
+                    cv2.imshow("track.py mask", mask)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     except KeyboardInterrupt:
@@ -139,7 +164,7 @@ def run(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Make Brachiomimus track faces with a webcam")
+    parser = argparse.ArgumentParser(description="Make Brachiomimus track a face or colored object with a webcam")
     parser.add_argument(
         "--port", default=config.PORT,
         help=f"Serial port the arm is connected to (default: {config.PORT})"
@@ -154,15 +179,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--show", action="store_true",
-        help="Open a debug window showing the camera feed with the detected face boxed"
+        help="Open a debug window showing the camera feed with the detected target boxed (plus the color mask in --target color mode)"
     )
     parser.add_argument(
         "--pan-range", type=float, default=45.0,
-        help="Max shoulder_pan degrees off-center when a face is at the frame edge (default: 45)"
+        help="Max shoulder_pan degrees off-center when the target is at the frame edge (default: 45)"
     )
     parser.add_argument(
         "--tilt-range", type=float, default=20.0,
-        help="Max wrist_flex degrees off-center when a face is at the frame edge (default: 20)"
+        help="Max wrist_flex degrees off-center when the target is at the frame edge (default: 20)"
     )
     parser.add_argument(
         "--invert-pan", action="store_true",
@@ -172,8 +197,30 @@ if __name__ == "__main__":
         "--invert-tilt", action="store_true",
         help="Flip up/down tracking direction (camera orientation dependent)"
     )
+    parser.add_argument(
+        "--target", choices=["face", "color"], default="face",
+        help="What to track: a face (Haar cascade, needs OpenCV 4.x) or an HSV color blob "
+             "(needs no particular OpenCV version - see --hue-min etc.) (default: face)"
+    )
+    parser.add_argument(
+        "--hue-min", type=int, default=125,
+        help="--target color: HSV hue lower bound, 0-179 (default: 125, roughly lavender)"
+    )
+    parser.add_argument(
+        "--hue-max", type=int, default=155,
+        help="--target color: HSV hue upper bound, 0-179 (default: 155)"
+    )
+    parser.add_argument(
+        "--sat-min", type=int, default=40,
+        help="--target color: HSV saturation lower bound, 0-255 (default: 40)"
+    )
+    parser.add_argument(
+        "--val-min", type=int, default=60,
+        help="--target color: HSV value/brightness lower bound, 0-255 (default: 60)"
+    )
     args = parser.parse_args()
     run(
         args.port, args.camera, args.dry_run, args.show,
         args.pan_range, args.tilt_range, args.invert_pan, args.invert_tilt,
+        args.target, args.hue_min, args.hue_max, args.sat_min, args.val_min,
     )

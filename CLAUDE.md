@@ -61,8 +61,9 @@ building blocks:
   `blend()` (lerp between two poses) and `clamp_step()` (per-tick slew limit,
   the thing that keeps motion smooth/safe — was previously copy-pasted into
   every demo before being extracted here).
-- `vision.py` — OpenCV perception primitives (Haar-cascade face detection for
-  `track.py`, HSV colored-blob detection for `reach.py`).
+- `vision.py` — OpenCV perception primitives: Haar-cascade face detection
+  (used by `track.py`'s `--target face`) and HSV colored-blob detection
+  (used by `reach.py` and `track.py`'s `--target color`).
 - `audio.py` — real-time audio sources for `dance.py` (`mic` via
   `sounddevice`/PortAudio, `loopback` via `soundcard`/WASAPI, `file` playback).
 - `analysis.py` — audio DSP: loudness envelope + bass-band beat/onset
@@ -79,9 +80,11 @@ building blocks:
   "does calibration work at all" check.
 - `dance.py` — rung 0, music-reactive motion driven live by `audio.py` +
   `analysis.py` (see `docs/music.md` for the full behavior description).
-- `track.py` — rung 0.5, room-facing webcam + Haar-cascade face detection,
-  turns to face whoever it sees. Requires OpenCV **4.x** (`cv2.CascadeClassifier`
-  was removed in OpenCV 5).
+- `track.py` — rung 0.5, room-facing webcam, turns to face a target. Two
+  `--target` modes: `face` (default, Haar-cascade detection, requires
+  OpenCV **4.x** — `cv2.CascadeClassifier` was removed in OpenCV 5) or
+  `color` (HSV blob detection via `vision.find_blob`, the same primitive
+  `reach.py` uses for its wrist-camera grasp — no OpenCV-version constraint).
 - `reach.py` — rung 0.5, wrist-camera colored-blob visual servoing (center →
   advance → grasp), no IK/depth — see the module docstring for the on-arm
   tuning workflow (hover pose, HSV range, pan/tilt inversion). No force
