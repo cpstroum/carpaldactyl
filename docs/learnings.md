@@ -64,9 +64,18 @@ for muted objects under a color cast. Sample actual pixels with
 *saturated* marker in a hue absent from the scene — high saturation also keeps
 the low-saturation gripper and pale background out of the mask.
 
-**No force sensing.** Visual servoing has no grasp confirmation — the arm can't
-tell whether it actually closed on the object. Watch the lift; don't leave it
-running unattended.
+**No true force sensing, but `reach.py` has a load-based heuristic.** Visual
+servoing alone has no grasp confirmation. `reach.py`'s GRASP state can end
+early by reading the gripper servo's `Present_Load` and comparing it to
+`--load-threshold` (disabled by default at 0): closing on a rigid object
+(a can, a block) stalls the servo against it well before the commanded
+`--gripper-closed` angle, so load climbs past whatever's normal in open
+air. This is still a heuristic, not confirmation — a soft/thin target may
+never build enough load (falls back to the `GRASP_HOLD_S` timer, same as
+before this existed), and friction could false-trigger it early. Tune the
+threshold empirically with `--show` (watch the live `load=` overlay while
+squeezing the real target) rather than guessing a number. Watch the lift;
+don't leave it running unattended regardless.
 
 ## Rung 1 — training ACT on HF Jobs
 

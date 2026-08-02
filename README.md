@@ -155,8 +155,12 @@ python -m demos.reach --dry-run --show      # tune detection with no arm connect
 docstring in `demos/reach.py` for what to jog in by hand (the hover pose) and
 what to dial in with `--show` (the HSV color range, and
 `--invert-pan`/`--invert-tilt` if centering moves the wrong way). There's
-no force sensing, so it doesn't verify the grasp actually took — watch the
-lift and judge for yourself, and don't leave it unattended.
+no true force sensing, so it doesn't fully verify the grasp actually took —
+watch the lift and judge for yourself, and don't leave it unattended. For a
+rigid target (a can, a block), `--load-threshold` can end the grasp hold
+early once the gripper servo's reported load shows it's stalled against the
+object instead of always waiting the fixed hold time — tune it with `--show`
+and the "load=" overlay value; it's disabled by default.
 
 **Pick a good target.** Detection is color-based, so it wants a distinct,
 *saturated* color. Muted natural objects (dried lavender) under a color
