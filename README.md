@@ -156,11 +156,7 @@ docstring in `demos/reach.py` for what to jog in by hand (the hover pose) and
 what to dial in with `--show` (the HSV color range, and
 `--invert-pan`/`--invert-tilt` if centering moves the wrong way). There's
 no true force sensing, so it doesn't fully verify the grasp actually took —
-watch the lift and judge for yourself, and don't leave it unattended. For a
-rigid target (a can, a block), `--load-threshold` can end the grasp hold
-early once the gripper servo's reported load shows it's stalled against the
-object instead of always waiting the fixed hold time — tune it with `--show`
-and the "load=" overlay value; it's disabled by default.
+watch the lift and judge for yourself, and don't leave it unattended.
 
 **Pick a good target.** Detection is color-based, so it wants a distinct,
 *saturated* color. Muted natural objects (dried lavender) under a color
@@ -173,6 +169,23 @@ marker's real HSV (click it in the feed), then set `--hue-min/--hue-max/
 the grasp still triggers. (There's also a `--white` mode for a white-string
 target, but it needs a dark backdrop and can latch onto a shiny gripper — a
 colored marker is safer.)
+
+**Determine the load threshold.** For a rigid target (a can, a block),
+`--load-threshold` can end the grasp hold early once the gripper servo's
+reported load shows it's stalled against the object, instead of always
+waiting the fixed `GRASP_HOLD_S` hold time — it's disabled (`0`) by default,
+so this is opt-in tuning, not required to get a working grasp. To pick a
+value:
+1. Run with `--show` and `--load-threshold` left at its default (0) so
+   nothing triggers early.
+2. Let it grasp the real target and watch the "load=" number in the debug
+   overlay while the gripper closes on it.
+3. Note the baseline load in open air (closing on nothing) versus the load
+   once it stalls against the object — pick a threshold clearly above the
+   former and comfortably below the latter.
+4. Re-run with `--load-threshold <that number>` and confirm it now lifts
+   sooner than the fixed hold time when it actually grasps something, while
+   still falling back to `GRASP_HOLD_S` if it closes on empty air.
 
 ## Rungs 1 & 2 — learned policies
 
