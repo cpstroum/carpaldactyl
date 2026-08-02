@@ -10,10 +10,13 @@ tracks up/down. No ML training or eye-in-hand calibration needed.
 Two target modes, selected with --target:
   - face  (default) — OpenCV's built-in Haar cascade face detector.
   - color            — an HSV color blob, same detection reach.py uses for
-    its wrist-camera grasp (brachiomimus.vision.find_blob). Tune
-    --hue-min/--hue-max/--sat-min/--val-min the same way reach.py's
-    docstring describes: use `python -m tools.probe_color` to read a
-    marker's real HSV, and --show to see the mask while dialing it in.
+    its wrist-camera grasp (brachiomimus.vision.find_blob). The
+    --hue-min/--hue-max/--sat-min/--val-min defaults bracket a red/orange
+    can (probed with tools.probe_color: mean H=6 S=96 V=231, spread
+    H[5-9] S[90-102] V[224-235]) - re-probe and override them for a
+    different target the same way reach.py's docstring describes: use
+    `python -m tools.probe_color` to read the real HSV, and --show to see
+    the mask while dialing it in.
 
 When the target first appears, the gripper gives a quick friendly pulse.
 When nothing is in view, the arm eases back to a centered "watching" pose
@@ -203,20 +206,21 @@ if __name__ == "__main__":
              "(needs no particular OpenCV version - see --hue-min etc.) (default: face)"
     )
     parser.add_argument(
-        "--hue-min", type=int, default=125,
-        help="--target color: HSV hue lower bound, 0-179 (default: 125, roughly lavender)"
+        "--hue-min", type=int, default=3,
+        help="--target color: HSV hue lower bound, 0-179 (default: 3, bracketing a red/orange can - "
+             "probed with tools.probe_color at mean H=6 S=96 V=231, spread H[5-9] S[90-102] V[224-235])"
     )
     parser.add_argument(
-        "--hue-max", type=int, default=155,
-        help="--target color: HSV hue upper bound, 0-179 (default: 155)"
+        "--hue-max", type=int, default=11,
+        help="--target color: HSV hue upper bound, 0-179 (default: 11)"
     )
     parser.add_argument(
-        "--sat-min", type=int, default=40,
-        help="--target color: HSV saturation lower bound, 0-255 (default: 40)"
+        "--sat-min", type=int, default=80,
+        help="--target color: HSV saturation lower bound, 0-255 (default: 80)"
     )
     parser.add_argument(
-        "--val-min", type=int, default=60,
-        help="--target color: HSV value/brightness lower bound, 0-255 (default: 60)"
+        "--val-min", type=int, default=210,
+        help="--target color: HSV value/brightness lower bound, 0-255 (default: 210)"
     )
     args = parser.parse_args()
     run(
